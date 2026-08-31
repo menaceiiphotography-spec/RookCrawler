@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rook Crawler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --surface2:  #1c2230;
+    --border:    #21262d;
+    --border2:   #30363d;
+    --accent:    #58a6ff;
+    --accent-dim:#1f3a5c;
+    --green:     #3fb950;
+    --green-dim: #0f2a15;
+    --red:       #f85149;
+    --red-dim:   #2a0f0f;
+    --yellow:    #e3b341;
+    --yellow-dim:#2a200a;
+    --muted:     #8b949e;
+    --text:      #c9d1d9;
+    --text-hi:   #f0f6fc;
+    --mono:      'JetBrains Mono', monospace;
+    --sans:      'Inter', sans-serif;
+  }
+
+  html, body { height: 100%; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* TOP BAR */
+  #topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    height: 44px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    user-select: none;
+  }
+  #topbar .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-hi);
+    letter-spacing: 0.05em;
+  }
+  #topbar .logo span { color: var(--accent); }
+  #topbar .spacer { flex: 1; }
+  #status-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--muted);
+    transition: all 0.2s;
+  }
+  #status-badge.running { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+  #status-badge.error   { background: var(--red-dim);   border-color: var(--red);   color: var(--red); }
+
+  /* MAIN LAYOUT */
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR */
+  #sidebar {
+    width: 300px;
+    min-width: 240px;
+    max-width: 360px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .sidebar-section { border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .sidebar-header:hover { color: var(--text); }
+  .sidebar-header .chevron { transition: transform 0.15s; font-size: 9px; }
+  .sidebar-header.collapsed .chevron { transform: rotate(-90deg); }
+  .sidebar-body { padding: 8px; }
+  .sidebar-body.collapsed { display: none; }
+
+  #url-list { display: flex; flex-direction: column; gap: 4px; flex: 1; overflow-y: auto; }
+  .url-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: 5px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.1s;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .url-item:hover { background: var(--surface2); border-color: var(--border2); }
+  .url-item.active { background: var(--accent-dim); border-color: var(--accent); }
+  .url-item .url-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+  .url-item.active .url-text { color: var(--accent); }
+  .url-item .url-status { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--border2); }
+  .url-item .url-status.done    { background: var(--green); }
+  .url-item .url-status.running { background: var(--accent); animation: pulse 1s infinite; }
+  .url-item .url-status.error   { background: var(--red); }
+  .url-item .url-status.queued  { background: var(--yellow); }
+  .url-item .url-del {
+    opacity: 0; font-size: 10px; color: var(--red); padding: 0 2px;
+    background: none; border: none; cursor: pointer; flex-shrink: 0;
+  }
+  .url-item:hover .url-del { opacity: 1; }
+
+  @keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:0.4 } }
+
+  #add-url-row { display: flex; gap: 4px; padding: 8px; border-top: 1px solid var(--border); }
+  #add-url-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 5px 8px;
+    border-radius: 4px;
+    outline: none;
+  }
+  #add-url-input:focus { border-color: var(--accent); }
+  #add-url-input::placeholder { color: var(--muted); }
+
+  .btn {
+    padding: 5px 12px;
+    border-radius: 4px;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid var(--border2);
+    cursor: pointer;
+    transition: all 0.1s;
+    white-space: nowrap;
+  }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #000; }
+  .btn-primary:hover { background: #79baff; }
+  .btn-ghost { background: transparent; color: var(--text); }
+  .btn-ghost:hover { background: var(--surface2); }
+  .btn-danger { background: transparent; border-color: var(--red); color: var(--red); }
+  .btn-danger:hover { background: var(--red-dim); }
+  .btn-green { background: var(--green); border-color: var(--green); color: #000; }
+  .btn-green:hover { background: #5cc96b; }
+  .btn-sm { padding: 3px 8px; font-size: 11px; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  #crawl-controls { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  #crawl-controls .ctrl-row { display: flex; gap: 4px; align-items: center; }
+  #crawl-controls .ctrl-row label { font-size: 11px; color: var(--muted); min-width: 90px; }
+  #crawl-controls .ctrl-row input,
+  #crawl-controls .ctrl-row select {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 7px;
+    border-radius: 4px;
+    outline: none;
+  }
+  #crawl-controls .ctrl-row input:focus,
+  #crawl-controls .ctrl-row select:focus { border-color: var(--accent); }
+  #crawl-controls .ctrl-row input[type=checkbox] {
+    width: 14px; height: 14px; flex: unset; cursor: pointer; accent-color: var(--accent);
+  }
+  .action-row { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--border); flex-shrink: 0; }
+
+  #panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  #tabs {
+    display: flex;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 12px;
+    gap: 0;
+    flex-shrink: 0;
+  }
+  .tab {
+    padding: 10px 16px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.1s;
+    user-select: none;
+    position: relative;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text-hi); border-bottom-color: var(--accent); }
+  .tab .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 0px 5px;
+    border-radius: 10px;
+    background: var(--surface2);
+    color: var(--muted);
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .tab.active .badge { background: var(--accent-dim); color: var(--accent); }
+
+  .tab-panel { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+  .tab-panel.active { display: flex; }
+
+  #log-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.7;
+  }
+  .log-entry { display: flex; gap: 10px; }
+  .log-ts { color: var(--muted); flex-shrink: 0; min-width: 70px; }
+  .log-msg { color: var(--text); flex: 1; word-break: break-all; }
+  .log-entry.info .log-msg { color: var(--text); }
+  .log-entry.ok   .log-msg { color: var(--green); }
+  .log-entry.warn .log-msg { color: var(--yellow); }
+  .log-entry.err  .log-msg { color: var(--red); }
+  .log-entry.dim  .log-msg { color: var(--muted); }
+
+  #results-container { flex: 1; overflow-y: auto; padding: 0; }
+  .result-card {
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .result-card:hover { background: var(--surface2); }
+  .result-card.expanded { background: var(--surface2); }
+  .result-meta { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .result-url {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .result-title { font-size: 13px; font-weight: 500; color: var(--text-hi); margin-bottom: 4px; }
+  .result-snippet { font-size: 11px; color: var(--muted); line-height: 1.5; }
+  .result-tags { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+  .tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+  }
+  .tag.match { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  .result-expand {
+    margin-top: 10px;
+    padding: 10px;
+    background: var(--bg);
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text);
+    white-space: pre-wrap;
+    max-height: 300px;
+    overflow-y: auto;
+    display: none;
+  }
+  .result-card.expanded .result-expand { display: block; }
+  #results-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  #results-toolbar input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 5px 9px;
+    border-radius: 4px;
+    outline: none;
+  }
+  #results-toolbar input:focus { border-color: var(--accent); }
+
+  #denial-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .denial-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 6px;
+  }
+  .denial-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+  .denial-table th {
+    text-align: left;
+    padding: 5px 8px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    font-weight: 500;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .denial-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); color: var(--text); }
+  .denial-table td:first-child { font-family: var(--mono); color: var(--text-hi); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .reason-pill { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 10px; font-family: var(--mono); font-weight: 500; }
+  .reason-DEPTH_LIMIT     { background:#2a200a; color:var(--yellow); border:1px solid var(--yellow); }
+  .reason-ROBOTS_TXT      { background:#1f1c2a; color:#a78bfa; border:1px solid #a78bfa; }
+  .reason-EXCLUDE_PATTERN { background:var(--red-dim); color:var(--red); border:1px solid var(--red); }
+  .reason-INCLUDE_PATTERN { background:var(--red-dim); color:var(--red); border:1px solid var(--red); }
+  .reason-FILE_TYPE       { background:#1a2535; color:#60a5fa; border:1px solid #60a5fa; }
+  .reason-SOCIAL_MEDIA    { background:#2a1a2e; color:#c084fc; border:1px solid #c084fc; }
+  .reason-EXTERNAL_LINK   { background:var(--surface2); color:var(--muted); border:1px solid var(--border2); }
+  .reason-BACKWARD_CRAWLING { background:var(--yellow-dim); color:var(--yellow); border:1px solid var(--yellow); }
+  .reason-SECTION_LINK    { background:var(--surface2); color:var(--muted); border:1px solid var(--border2); }
+  .reason-NON_WEB_PROTOCOL{ background:var(--surface2); color:var(--muted); border:1px solid var(--border2); }
+  .reason-URL_PARSE_ERROR { background:var(--red-dim); color:var(--red); border:1px solid var(--red); }
+  .reason-DEDUP           { background:var(--green-dim); color:var(--green); border:1px solid var(--green); }
+
+  #stats-bar {
+    display: flex;
+    gap: 16px;
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .stat { display: flex; gap: 6px; align-items: center; }
+  .stat-val { font-family: var(--mono); font-weight: 500; color: var(--text-hi); }
+  .stat-lbl { color: var(--muted); }
+  .stat-val.green { color: var(--green); }
+  .stat-val.red   { color: var(--red); }
+  .stat-val.blue  { color: var(--accent); }
+  .stat-val.yellow{ color: var(--yellow); }
+
+  #modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #modal-overlay.open { display: flex; }
+  #modal {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    width: 560px;
+    max-width: 95vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+  }
+  #modal-header { display: flex; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+  #modal-header h2 { font-size: 14px; font-weight: 600; color: var(--text-hi); flex: 1; }
+  #modal-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 0 4px; }
+  #modal-close:hover { color: var(--text); }
+  #modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+  #modal-footer { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .form-group textarea,
+  .form-group input,
+  .form-group select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 10px;
+    border-radius: 5px;
+    outline: none;
+    resize: vertical;
+  }
+  .form-group textarea:focus,
+  .form-group input:focus,
+  .form-group select:focus { border-color: var(--accent); }
+  .form-group .hint { font-size: 10px; color: var(--muted); margin-top: 4px; }
+  .form-row { display: flex; gap: 12px; }
+  .form-row .form-group { flex: 1; }
+  .checkbox-group { display: flex; align-items: center; gap: 8px; }
+  .checkbox-group input { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
+  .checkbox-group label { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--text); margin: 0; }
+
+  .section-divider {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 8px 0 4px;
+    border-top: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  #statusbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 14px;
+    height: 24px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  #statusbar .sb-item { display: flex; gap: 5px; align-items: center; }
+  #statusbar .sb-val { color: var(--text); }
+  #progress-bar-wrap {
+    position: absolute;
+    bottom: 24px;
+    left: 300px;
+    right: 0;
+    height: 2px;
+    background: var(--border);
+    z-index: 10;
+    display: none;
+  }
+  #progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex: 1;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 40px;
+    text-align: center;
+  }
+  .empty-state .icon { font-size: 32px; margin-bottom: 4px; opacity: 0.4; }
+
+  #cors-notice {
+    display: none;
+    background: var(--yellow-dim);
+    border-bottom: 1px solid var(--yellow);
+    padding: 6px 14px;
+    font-size: 11px;
+    color: var(--yellow);
+    flex-shrink: 0;
+  }
+/* ===== ROOK MOBILE RESPONSIVE PATCH ===== */
+@media (max-width: 700px) {
+  html, body {
+    width: 100%;
+    max-width: 100%;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  #main {
+    position: relative;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    height: calc(100dvh - 72px);
+    overflow: hidden;
+  }
+
+  #sidebar {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: auto;
+    max-height: 46dvh;
+    flex: 0 0 auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  #sidebar > .sidebar-section:first-child {
+    flex: none !important;
+    max-height: 20dvh;
+  }
+
+  #url-list {
+    max-height: 14dvh;
+  }
+
+  #crawl-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  #crawl-controls .ctrl-row {
+    min-width: 0;
+  }
+
+  #crawl-controls .ctrl-row label {
+    min-width: 0;
+  }
+
+  .action-row {
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+    width: 100%;
+    min-height: 58px;
+    padding: 8px;
+    background: var(--surface);
+    border-top: 1px solid var(--border2);
+    box-shadow: 0 -8px 20px rgba(0,0,0,.35);
+  }
+
+  .action-row .btn {
+    min-height: 42px;
+    font-size: 13px;
+  }
+
+  #panel {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  #stats-bar {
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+
+  #stats-bar::-webkit-scrollbar,
+  #tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  #tabs {
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+
+  .tab {
+    flex: 0 0 auto;
+    padding: 10px 12px;
+  }
+
+  #results-toolbar {
+    flex-wrap: wrap;
+  }
+
+  #results-toolbar input {
+    min-width: 100%;
+    order: -1;
+  }
+
+  #modal-overlay {
+    align-items: flex-end;
+  }
+
+  #modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92dvh;
+    border-radius: 10px 10px 0 0;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  #progress-bar-wrap {
+    left: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  #crawl-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .action-row {
+    min-height: 62px;
+  }
+
+  .action-row .btn {
+    min-height: 46px;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+  #sidebar {
+    max-height: 55dvh;
+  }
+
+  #crawl-controls {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+/* ===== END ROOK MOBILE RESPONSIVE PATCH ===== */
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="logo"><span>ROOK</span> CRAWLER</div>
+  <div class="spacer"></div>
+  <span id="status-badge">idle</span>
+  <button class="btn btn-ghost btn-sm" onclick="openConfig()">Config</button>
+</div>
+
+<div id="cors-notice">
+  No proxy reachable. This page must be opened from the local server (http://localhost:8010), or set a CORS proxy in Config.
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <div class="sidebar-section" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+      <div class="sidebar-header" onclick="toggleSection('urls')">
+        <span>TARGET URLS</span>
+        <span class="chevron" id="chevron-urls">&#9662;</span>
+      </div>
+      <div class="sidebar-body" id="body-urls" style="flex:1;overflow:hidden;display:flex;flex-direction:column;padding:6px;">
+        <div id="url-list"></div>
+      </div>
+      <div id="add-url-row">
+        <input id="add-url-input" type="text" placeholder="https://example.com" onkeydown="if(event.key==='Enter')addUrl()">
+        <button class="btn btn-primary btn-sm" onclick="addUrl()">+</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-header" onclick="toggleSection('settings')">
+        <span>CRAWL SETTINGS</span>
+        <span class="chevron" id="chevron-settings">&#9662;</span>
+      </div>
+      <div class="sidebar-body" id="body-settings">
+        <div id="crawl-controls">
+          <div class="ctrl-row"><label>Max Depth</label><input type="number" id="s-max-depth" value="3" min="1" max="20"></div>
+          <div class="ctrl-row"><label>Max Pages</label><input type="number" id="s-max-pages" value="50" min="1" max="2000"></div>
+          <div class="ctrl-row"><label>Concurrency</label><input type="number" id="s-concurrency" value="3" min="1" max="10"></div>
+          <div class="ctrl-row"><label>Delay (ms)</label><input type="number" id="s-delay" value="500" min="0" max="10000"></div>
+          <div class="ctrl-row"><label>Allow Ext.</label><input type="checkbox" id="s-allow-ext"></div>
+          <div class="ctrl-row"><label>Allow Sub.</label><input type="checkbox" id="s-allow-sub" checked></div>
+          <div class="ctrl-row"><label>Allow Back.</label><input type="checkbox" id="s-allow-back"></div>
+          <div class="ctrl-row"><label>Obey Robots</label><input type="checkbox" id="s-robots" checked></div>
+          <div class="ctrl-row"><label>Only Main</label><input type="checkbox" id="s-main-content" checked></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="btn btn-green" id="btn-start" onclick="startCrawl()" style="flex:1">Start</button>
+      <button class="btn btn-danger" id="btn-stop" onclick="stopCrawl()" style="flex:1" disabled>Stop</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearAll()" title="Clear all results">Clear</button>
+    </div>
+  </div>
+
+  <div id="panel">
+    <div id="stats-bar">
+      <div class="stat"><span class="stat-val blue" id="st-discovered">0</span><span class="stat-lbl">discovered</span></div>
+      <div class="stat"><span class="stat-val green" id="st-fetched">0</span><span class="stat-lbl">fetched</span></div>
+      <div class="stat"><span class="stat-val" id="st-results">0</span><span class="stat-lbl">results</span></div>
+      <div class="stat"><span class="stat-val yellow" id="st-denied">0</span><span class="stat-lbl">denied</span></div>
+      <div class="stat"><span class="stat-val red" id="st-errors">0</span><span class="stat-lbl">errors</span></div>
+      <div class="stat"><span class="stat-val" id="st-dedup">0</span><span class="stat-lbl">dedup'd</span></div>
+    </div>
+
+    <div id="tabs">
+      <div class="tab active" onclick="switchTab('log')" id="tab-log">Live Log <span class="badge" id="badge-log">0</span></div>
+      <div class="tab" onclick="switchTab('results')" id="tab-results">Results <span class="badge" id="badge-results">0</span></div>
+      <div class="tab" onclick="switchTab('denial')" id="tab-denial">Denial Map <span class="badge" id="badge-denial">0</span></div>
+    </div>
+
+    <div class="tab-panel active" id="panel-log">
+      <div id="log-container">
+        <div class="empty-state"><div class="icon">&#11041;</div><div>Add a target URL and press Start.</div></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="panel-results">
+      <div id="results-toolbar">
+        <input type="text" id="results-search" placeholder="Filter results by keyword, URL, or tag..." oninput="filterResults()">
+        <button class="btn btn-ghost btn-sm" onclick="exportResults()">Export JSON</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportCSV()">CSV</button>
+      </div>
+      <div id="results-container">
+        <div class="empty-state"><div class="icon">&#9707;</div><div>No results yet. Configure your targets and run a crawl.</div></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="panel-denial">
+      <div id="denial-container">
+        <div class="empty-state"><div class="icon">&#8856;</div><div>Denied URLs will appear here with their reason codes.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+
+<div id="statusbar">
+  <div class="sb-item">proxy: <span class="sb-val" id="sb-proxy-mode">local</span></div>
+  <div class="sb-item">dedup: <span class="sb-val" id="sb-dedup-algo">SHA-256 content hash</span></div>
+  <div class="sb-item">queue: <span class="sb-val" id="sb-queue">0</span></div>
+  <div class="sb-item" id="sb-current-url" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+</div>
+
+<div id="modal-overlay" onclick="if(event.target===this)closeConfig()">
+  <div id="modal">
+    <div id="modal-header">
+      <h2>Extraction Config</h2>
+      <button id="modal-close" onclick="closeConfig()">&#10005;</button>
+    </div>
+    <div id="modal-body">
+      <div class="section-divider">DATA TARGETING</div>
+      <div class="form-group">
+        <label>Keywords / Topics to Extract</label>
+        <textarea id="cfg-keywords" rows="3" placeholder="pricing&#10;contact&#10;about us&#10;API documentation"></textarea>
+        <div class="hint">One per line. Results are flagged when page content matches these terms.</div>
+      </div>
+      <div class="form-group">
+        <label>CSS Selectors to Extract</label>
+        <textarea id="cfg-selectors" rows="3" placeholder="article&#10;.post-body&#10;main > p&#10;h1, h2, h3"></textarea>
+        <div class="hint">One per line. Matching element text is extracted. Falls back to full page text if empty.</div>
+      </div>
+      <div class="form-group">
+        <label>Include URL Patterns (regex)</label>
+        <textarea id="cfg-includes" rows="2" placeholder="/blog/&#10;/docs/&#10;/product/"></textarea>
+        <div class="hint">Only crawl URLs matching these patterns. Empty = allow all internal.</div>
+      </div>
+      <div class="form-group">
+        <label>Exclude URL Patterns (regex)</label>
+        <textarea id="cfg-excludes" rows="2" placeholder="/login&#10;/logout&#10;/cart&#10;\.(pdf|zip)$"></textarea>
+        <div class="hint">Skip URLs matching these patterns.</div>
+      </div>
+
+      <div class="section-divider">FILTERS</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Skip File Extensions</label>
+          <input type="text" id="cfg-ext-blacklist" value=".png,.jpg,.gif,.svg,.css,.js,.ico,.zip,.exe,.mp4,.mp3,.pdf,.woff,.ttf">
+          <div class="hint">Comma-separated.</div>
+        </div>
+        <div class="form-group">
+          <label>Skip Social Media</label>
+          <div class="checkbox-group" style="margin-top:8px;">
+            <input type="checkbox" id="cfg-skip-social" checked>
+            <label for="cfg-skip-social">facebook, twitter, linkedin, instagram, discord, github, pinterest, calendly</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-divider">NETWORK</div>
+      <div class="form-group">
+        <label>CORS Proxy URL (override)</label>
+        <input type="text" id="cfg-proxy" placeholder="/?url=  (default: the local server that served this page)">
+        <div class="hint">Empty = use the local server (server.js) that served this page. Override for another proxy, e.g. https://api.allorigins.win/raw?url= . Value is prepended to the encoded target URL.</div>
+      </div>
+      <div class="form-group">
+        <label>Proxy Token</label>
+        <input type="text" id="cfg-proxy-token" placeholder="only if server auth is enabled">
+        <div class="hint">Must match token.txt / PROXY_TOKEN on the server. Leave empty if no token is set.</div>
+      </div>
+      <div class="form-group">
+        <label>Custom User-Agent</label>
+        <input type="text" id="cfg-ua" value="RookCrawler/1.0">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Request Timeout (ms)</label>
+          <input type="number" id="cfg-timeout" value="10000" min="1000" max="60000">
+        </div>
+        <div class="form-group">
+          <label>Max Response Size (KB)</label>
+          <input type="number" id="cfg-max-size" value="512" min="10" max="10240">
+        </div>
+      </div>
+    </div>
+    <div id="modal-footer">
+      <button class="btn btn-ghost" onclick="closeConfig()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveConfig()">Save Config</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DEFAULT_PROXY = '/?url=';
+function buildFetchUrl(url) {
+  const base = (state.config.proxyUrl && state.config.proxyUrl.trim()) || DEFAULT_PROXY;
+  let out = base + encodeURIComponent(url);
+  const tok = state.config.proxyToken && state.config.proxyToken.trim();
+  if (tok) out += (out.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(tok);
+  return out;
+}
+
+const state = {
+  targets: [], activeTarget: null, crawling: false, abortController: null, _finishCalled: false,
+  results: [], deniedUrls: [], seenHashes: new Set(), seenUrls: new Set(),
+  stats: { discovered:0, fetched:0, results:0, denied:0, errors:0, dedup:0 },
+  config: {
+    keywords: [], selectors: [], includes: [], excludes: [],
+    extBlacklist: ['.png','.jpg','.jpeg','.gif','.svg','.css','.js','.ico','.zip','.exe','.dmg','.mp4','.mp3','.pdf','.woff','.ttf','.woff2','.webp','.inc'],
+    skipSocial: true, proxyUrl: '', proxyToken: '', userAgent: 'RookCrawler/1.0', timeout: 10000, maxSize: 512 * 1024,
+  },
+  settings: { maxDepth:3, maxPages:50, concurrency:3, delay:500, allowExternal:false, allowSubdomains:true, allowBackward:false, respectRobots:true, onlyMainContent:true }
+};
+
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+async function isContentDuplicate(content) {
+  const hash = await sha256(content.trim());
+  if (state.seenHashes.has(hash)) return 'CONTENT_DUPLICATE';
+  state.seenHashes.add(hash); return false;
+}
+function normalizeUrl(url) {
+  try {
+    const u = new URL(url); u.hash = '';
+    if (u.pathname !== '/' && u.pathname.endsWith('/')) u.pathname = u.pathname.slice(0,-1);
+    u.searchParams.sort();
+    return u.toString().toLowerCase();
+  } catch { return url.toLowerCase(); }
+}
+function tryEnqueueUrl(normUrl) { if (state.seenUrls.has(normUrl)) return false; state.seenUrls.add(normUrl); return true; }
+function safeOrigin(u){ try { return new URL(u).origin; } catch { return null; } }
+
+const SOCIAL_MEDIA_DOMAINS = ['facebook.com','twitter.com','x.com','linkedin.com','instagram.com','pinterest.com','github.com','calendly.com','discord.gg','discord.com','tiktok.com','youtube.com','reddit.com','tumblr.com'];
+const NON_WEB_PROTOCOLS = ['mailto:','tel:','telnet:','ftp:','ftps:','ssh:','file:'];
+function isFile(pathname) { const d = pathname.lastIndexOf('.'); return d !== -1 && state.config.extBlacklist.includes(pathname.slice(d).toLowerCase()); }
+function isNonWebProtocol(s) { return NON_WEB_PROTOCOLS.some(p => s.startsWith(p)); }
+function isSocialMedia(hostname) { if (!state.config.skipSocial) return false; const h = hostname.toLowerCase().replace(/^www\./,''); return SOCIAL_MEDIA_DOMAINS.some(d => h === d || h.endsWith('.'+d)); }
+function stripWww(host){ return host.replace(/^www\./,''); }
+function isInternalLink(a,b){ return stripWww(a) === stripWww(b); }
+function isSubdomain(a,b){ const base = stripWww(b), r = stripWww(a); return r === base || r.endsWith('.'+base); }
+function noSections(s){ if (!s.includes('#')) return true; const h = s.split('#')[1] || ''; return h.length > 1 && h.includes('/'); }
+function safeRegexTest(pattern, target){ try { return new RegExp(pattern).test(target); } catch(e){ log('Invalid regex: ' + pattern + ' - ' + e.message, 'warn'); return null; } }
+
+function filterUrl(href, pageUrl, baseUrl, initialPath) {
+  if (isNonWebProtocol(href)) return deny('NON_WEB_PROTOCOL');
+  let resolved; try { resolved = new URL(href, pageUrl); } catch { return deny('URL_PARSE_ERROR'); }
+  const path = resolved.pathname, urlStr = resolved.toString(), hostname = resolved.hostname;
+  if (isFile(path)) return deny('FILE_TYPE');
+  if (isNonWebProtocol(urlStr)) return deny('NON_WEB_PROTOCOL');
+  if (isSocialMedia(hostname)) return deny('SOCIAL_MEDIA');
+  const s = state.settings, cfg = state.config;
+  if (cfg.includes.length) { let ok=false; for (const p of cfg.includes){ const r=safeRegexTest(p,urlStr); if(r===null)continue; if(r){ok=true;break;} } if(!ok) return deny('INCLUDE_PATTERN'); }
+  if (cfg.excludes.length) { for (const p of cfg.excludes){ const r=safeRegexTest(p,urlStr); if(r===null)continue; if(r) return deny('EXCLUDE_PATTERN'); } }
+  const base = new URL(baseUrl);
+  if (isInternalLink(hostname, base.hostname)) {
+    if (!noSections(urlStr)) return deny('SECTION_LINK');
+    if (!s.allowBackward && initialPath && initialPath !== '/' && !path.startsWith(initialPath)) return deny('BACKWARD_CRAWLING');
+    return allow(resolved.toString());
+  }
+  if (s.allowSubdomains && isSubdomain(hostname, base.hostname) && !isSocialMedia(hostname)) {
+    if (cfg.includes.length){ let ok=false; for (const p of cfg.includes){ const r=safeRegexTest(p,urlStr); if(r===null)continue; if(r){ok=true;break;} } if(!ok) return deny('INCLUDE_PATTERN'); }
+    return allow(resolved.toString());
+  }
+  if (s.allowExternal && !isSocialMedia(hostname)) return allow(resolved.toString());
+  return deny('EXTERNAL_LINK');
+}
+function allow(url){ return { allowed:true, url, reason:null }; }
+function deny(reason){ return { allowed:false, url:null, reason }; }
+
+function parseRobots(txt){
+  const rules = { disallow:[], allow:[], crawlDelay:null }; let inOurs = false;
+  for (const line of txt.split('\n')) {
+    const l = line.split('#')[0].trim(); if (!l) continue;
+    const c = l.indexOf(':'); if (c === -1) continue;
+    const k = l.slice(0,c).trim().toLowerCase(), val = l.slice(c+1).trim();
+    if (k === 'user-agent') inOurs = val === '*' || val.toLowerCase().includes('rookcrawler');
+    if (!inOurs) continue;
+    if (k === 'disallow' && val) rules.disallow.push(val);
+    if (k === 'allow' && val) rules.allow.push(val);
+    if (k === 'crawl-delay' && !rules.crawlDelay){ const d = parseFloat(val); if (!isNaN(d)) rules.crawlDelay = Math.round(d*1000); }
+  }
+  return rules;
+}
+function robotsAllows(rules, url){
+  try {
+    const path = new URL(url).pathname;
+    const bestAllow = rules.allow.filter(p => path.startsWith(p)).sort((a,b)=>b.length-a.length)[0];
+    const bestDisallow = rules.disallow.filter(p => p === '/' || path.startsWith(p)).sort((a,b)=>b.length-a.length)[0];
+    if (bestAllow && bestDisallow) return bestAllow.length >= bestDisallow.length;
+    if (bestAllow) return true;
+    if (bestDisallow) return false;
+    return true;
+  } catch { return true; }
+}
+
+function parseSitemap(xml){
+  try {
+    const doc = new DOMParser().parseFromString(xml, 'text/xml');
+    const root = doc.documentElement, tag = root.tagName.replace(/.*:/,''), urls = [];
+    if (tag === 'sitemapindex') { for (const s of root.querySelectorAll('sitemap > loc')) urls.push({ url:s.textContent.trim(), type:'sitemap' }); }
+    else if (tag === 'urlset') { for (const loc of root.querySelectorAll('url > loc')) { const u = loc.textContent.trim(); urls.push({ url:u, type: (u.endsWith('.xml')||u.endsWith('.xml.gz')) ? 'sitemap' : 'page' }); } }
+    return urls;
+  } catch { return []; }
+}
+
+const EXCLUDE_TAGS = ['header','footer','nav','aside','.sidebar','.modal','.popup','.overlay','.ad','.ads','.advert','.cookie','#cookie','.menu','.navigation','.breadcrumbs','.share','.widget','.social','.social-media','.social-links','.lang-selector','.language','script','style','noscript'];
+function extractContent(html, url, onlyMain){
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const title = (doc.querySelector('title') && doc.querySelector('title').textContent.trim()) || '';
+  const description = (doc.querySelector('meta[name="description"]') && doc.querySelector('meta[name="description"]').getAttribute('content')) || '';
+  const ogTitle = (doc.querySelector('meta[property="og:title"]') && doc.querySelector('meta[property="og:title"]').getAttribute('content')) || '';
+  const links = [];
+  for (const a of doc.querySelectorAll('a[href]')) {
+    let href = a.getAttribute('href') || '';
+    if (href.startsWith('http:/') && !href.startsWith('http://')) href = 'http://' + href.slice(6);
+    else if (href.startsWith('https:/') && !href.startsWith('https://')) href = 'https://' + href.slice(7);
+    if (href) links.push(href);
+  }
+  if (onlyMain) for (const sel of EXCLUDE_TAGS){ try { doc.querySelectorAll(sel).forEach(el => el.remove()); } catch {} }
+  let textContent = '';
+  if (state.config.selectors.length) for (const sel of state.config.selectors){ try { doc.querySelectorAll(sel).forEach(el => { textContent += el.textContent + '\n'; }); } catch {} }
+  if (!textContent){ const b = doc.body; if (b) textContent = b.innerText || b.textContent || ''; }
+  textContent = textContent.replace(/\s+/g,' ').trim();
+  return { title: title || ogTitle, description, links, textContent };
+}
+
+function matchKeywords(text){ const kws = state.config.keywords; if (!kws.length) return []; const lower = text.toLowerCase(); return kws.filter(k => lower.includes(k.toLowerCase())); }
+function snippetAround(text, keyword, radius){
+  radius = radius || 120;
+  const idx = text.toLowerCase().indexOf(keyword.toLowerCase());
+  if (idx === -1) return text.slice(0,200) + '...';
+  const start = Math.max(0, idx - radius), end = Math.min(text.length, idx + keyword.length + radius);
+  return (start>0?'...':'') + text.slice(start,end) + (end<text.length?'...':'');
+}
+
+function makeFetchSignal(crawlSignal){
+  const ms = state.config.timeout || 10000;
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any([crawlSignal, AbortSignal.timeout(ms)]);
+  const tc = new AbortController();
+  const timer = setTimeout(() => tc.abort(new Error('Timeout')), ms);
+  crawlSignal.addEventListener('abort', () => { clearTimeout(timer); tc.abort(crawlSignal.reason); });
+  return tc.signal;
+}
+async function fetchPage(url, crawlSignal){
+  const resp = await fetch(buildFetchUrl(url), { signal: makeFetchSignal(crawlSignal) });
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  const text = await resp.text();
+  if (text.length > state.config.maxSize) throw new Error('Response too large (' + Math.round(text.length/1024) + 'KB)');
+  const ct = resp.headers.get('content-type') || '';
+  const ok = ct.includes('text/html') || ct.includes('text/xml') || ct.includes('application/xml') || ct.includes('text/plain') || text.trimStart().startsWith('<');
+  if (!ok) throw new Error('Non-HTML content: ' + ct);
+  return { text, contentType: ct };
+}
+async function fetchRobots(baseUrl, crawlSignal){
+  try { const r = await fetchPage(new URL('/robots.txt', baseUrl).toString(), crawlSignal); return parseRobots(r.text); }
+  catch (e) { log('  robots.txt unavailable for ' + baseUrl + ': ' + e.message, 'dim'); return null; }
+}
+
+async function startCrawl(){
+  if (state.crawling) return;
+  if (!state.targets.length) { log('No target URLs added.', 'warn'); return; }
+  syncSettings();
+  state.crawling = true; state._finishCalled = false; state.abortController = new AbortController();
+  setBadge('running');
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('btn-stop').disabled = false;
+  document.getElementById('progress-bar-wrap').style.display = 'block';
+
+  log('Crawl session started', 'ok');
+  log('Settings: depth=' + state.settings.maxDepth + ' pages=' + state.settings.maxPages + ' concurrency=' + state.settings.concurrency + ' timeout=' + state.config.timeout + 'ms', 'dim');
+  log('Proxy: ' + (state.config.proxyUrl.trim() || 'local server (/?url=)'), 'dim');
+  if (state.config.keywords.length) log('Targeting keywords: ' + state.config.keywords.join(', '), 'dim');
+
+  const queue = [];
+  const signal = state.abortController.signal;
+  const robotsCache = {};
+  const targetActiveCount = {};
+  let pagesFetched = 0;
+  let busy = 0;
+
+  async function getRobots(origin){
+    if (origin in robotsCache) return await robotsCache[origin];
+    const p = fetchRobots(origin, signal);
+    robotsCache[origin] = p;
+    const rules = await p; robotsCache[origin] = rules; return rules;
+  }
+
+  function filterAndEnqueue(href, pageUrl, baseUrl, initialPath, targetId, depth){
+    if (pagesFetched + queue.length >= state.settings.maxPages) return;
+    const v = filterUrl(href, pageUrl, baseUrl, initialPath);
+    if (v.allowed) {
+      if (tryEnqueueUrl(normalizeUrl(v.url))) {
+        queue.push({ url: v.url, depth, baseUrl, initialPath, targetId });
+        incStat('discovered');
+        document.getElementById('sb-queue').textContent = queue.length;
+      }
+    } else { recordDenied(href, v.reason); incStat('denied'); }
+  }
+
+  for (const target of state.targets) {
+    if (target.status !== 'idle') continue;
+    setTargetStatus(target.id, 'queued');
+    targetActiveCount[target.id] = 0;
+    try {
+      const u = new URL(target.url);
+      if (tryEnqueueUrl(normalizeUrl(target.url)))
+        queue.push({ url: target.url, depth: 0, baseUrl: target.url, initialPath: u.pathname, targetId: target.id });
+    } catch { log('Invalid URL: ' + target.url, 'err'); setTargetStatus(target.id, 'error'); }
+  }
+  if (!queue.length) { finishCrawl(); return; }
+
+  for (const target of state.targets) {
+    if (signal.aborted) break;
+    try {
+      const sitemapUrl = new URL('/sitemap.xml', target.url).toString();
+      const r = await fetchPage(sitemapUrl, signal);
+      const entries = parseSitemap(r.text);
+      const initPath = new URL(target.url).pathname;
+      let seeded = 0;
+      for (const entry of entries) {
+        if (entry.type !== 'page') continue;
+        if (pagesFetched + queue.length >= state.settings.maxPages) break;
+        const before = queue.length;
+        filterAndEnqueue(entry.url, target.url, target.url, initPath, target.id, 1);
+        if (queue.length > before) seeded++;
+      }
+      if (seeded > 0) log('Sitemap: seeded ' + seeded + ' URLs from ' + sitemapUrl, 'ok');
+    } catch {}
+  }
+
+  async function handleItem(item){
+    const origin = safeOrigin(item.url);
+    if (state.settings.respectRobots && origin) {
+      const robots = await getRobots(origin);
+      if (signal.aborted) return;
+      if (robots && !robotsAllows(robots, item.url)) { recordDenied(item.url, 'ROBOTS_TXT'); incStat('denied'); return; }
+    }
+    pagesFetched++;
+    document.getElementById('sb-queue').textContent = queue.length;
+    updateProgress(pagesFetched, state.settings.maxPages);
+    setSbCurrentUrl(item.url);
+    targetActiveCount[item.targetId] = (targetActiveCount[item.targetId] || 0) + 1;
+    setTargetStatus(item.targetId, 'running');
+    try {
+      log('Fetching [d' + item.depth + '] ' + item.url, 'info');
+      const r = await fetchPage(item.url, signal);
+      incStat('fetched');
+      const ex = extractContent(r.text, item.url, state.settings.onlyMainContent);
+      if (await isContentDuplicate(ex.textContent)) {
+        log('  skip CONTENT_DUPLICATE ' + item.url, 'dim'); recordDenied(item.url, 'DEDUP'); incStat('dedup');
+      } else {
+        const matches = matchKeywords(ex.textContent);
+        const snippet = matches.length ? snippetAround(ex.textContent, matches[0]) : ex.textContent.slice(0,200) + '...';
+        const result = { url:item.url, title:ex.title||item.url, description:ex.description, snippet, matches, textContent:ex.textContent, depth:item.depth, timestamp:Date.now() };
+        if (state.config.keywords.length === 0 || matches.length > 0) { state.results.push(result); incStat('results'); renderResult(result); }
+        if (matches.length) log('  match [' + matches.join(', ') + ']: ' + (ex.title || item.url), 'ok');
+        if (item.depth < state.settings.maxDepth) {
+          const initialPath = item.initialPath || '/'; let added = 0;
+          for (const href of ex.links) {
+            if (pagesFetched + queue.length >= state.settings.maxPages) break;
+            const before = queue.length;
+            filterAndEnqueue(href, item.url, item.baseUrl, initialPath, item.targetId, item.depth + 1);
+            if (queue.length > before) added++;
+          }
+          if (added) log('  queued ' + added + ' links', 'dim');
+        }
+      }
+    } catch (e) {
+      if (!signal.aborted) {
+        const isTimeout = e.name === 'TimeoutError' || e.message === 'Timeout';
+        log('  ' + (isTimeout ? 'timeout' : 'error') + ': ' + e.message + ' - ' + item.url, 'err'); incStat('errors');
+      }
+    } finally {
+      targetActiveCount[item.targetId]--;
+      if (targetActiveCount[item.targetId] <= 0 && !queue.some(q => q.targetId === item.targetId)) {
+        const t = state.targets.find(t => t.id === item.targetId);
+        if (t && t.status !== 'error') setTargetStatus(item.targetId, 'done');
+      }
+    }
+  }
+
+  async function worker(){
+    while (!signal.aborted && pagesFetched < state.settings.maxPages) {
+      const item = queue.shift();
+      if (!item) { if (busy === 0) break; await sleep(25); continue; }
+      busy++;
+      try { await handleItem(item); } finally { busy--; }
+      if (state.settings.delay > 0 && !signal.aborted) await sleep(state.settings.delay);
+    }
+  }
+
+  const workerCount = Math.max(1, Math.min(state.settings.concurrency, 32));
+  await Promise.all(Array.from({ length: workerCount }, worker));
+  finishCrawl();
+}
+
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+function stopCrawl(){
+  if (!state.crawling) return;
+  if (state.abortController) state.abortController.abort();
+  log('Crawl abort signalled - waiting for workers to exit.', 'warn');
+  setTimeout(() => { if (state.crawling) finishCrawl(); }, 3000);
+}
+
+function finishCrawl(){
+  if (state._finishCalled) return;
+  state._finishCalled = true; state.crawling = false;
+  setBadge('idle');
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-stop').disabled = true;
+  document.getElementById('progress-bar-wrap').style.display = 'none';
+  document.getElementById('sb-queue').textContent = '0';
+  setSbCurrentUrl('');
+  state.targets.forEach(t => { if (t.status === 'running' || t.status === 'queued') t.status = 'done'; });
+  renderTargets();
+  updateBadgeCounts(); renderDenialMap();
+  log('Session complete. ' + state.stats.results + ' results, ' + state.stats.fetched + ' fetched, ' + state.stats.denied + ' denied, ' + state.stats.dedup + " dedup'd, " + state.stats.errors + ' errors.', 'ok');
+}
+
+function incStat(key){ state.stats[key]++; const el = document.getElementById('st-' + key); if (el) el.textContent = state.stats[key]; }
+function updateProgress(done,total){ document.getElementById('progress-bar').style.width = (total ? Math.round(done/total*100) : 0) + '%'; }
+function setSbCurrentUrl(url){ document.getElementById('sb-current-url').textContent = url ? '> ' + url : ''; }
+function setBadge(mode){ const el = document.getElementById('status-badge'); el.textContent = mode === 'running' ? 'crawling' : mode; el.className = mode === 'running' ? 'running' : mode === 'error' ? 'error' : ''; }
+function updateBadgeCounts(){ document.getElementById('badge-results').textContent = state.results.length; document.getElementById('badge-denial').textContent = state.deniedUrls.length; document.getElementById('badge-log').textContent = document.querySelectorAll('.log-entry').length; document.getElementById('sb-queue').textContent = '0'; }
+
+function addUrl(){
+  const input = document.getElementById('add-url-input'); let val = input.value.trim(); if (!val) return;
+  if (!val.startsWith('http')) val = 'https://' + val;
+  try { new URL(val); } catch { log('Invalid URL: ' + val, 'err'); return; }
+  if (state.targets.find(t => t.url === val)) { log('URL already in list.', 'warn'); return; }
+  state.targets.push({ id: Date.now().toString(), url: val, status: 'idle' }); renderTargets(); input.value = '';
+}
+function removeUrl(id){ state.targets = state.targets.filter(t => t.id !== id); renderTargets(); }
+function setTargetStatus(id, status){ const t = state.targets.find(t => t.id === id); if (t){ t.status = status; renderTargets(); } }
+function renderTargets(){
+  const list = document.getElementById('url-list'); list.innerHTML = '';
+  if (!state.targets.length){ list.innerHTML = '<div style="color:var(--muted);font-size:11px;padding:6px;">No targets. Add a URL above.</div>'; return; }
+  for (const t of state.targets) {
+    const div = document.createElement('div');
+    div.className = 'url-item' + (state.activeTarget === t.id ? ' active' : '');
+    div.innerHTML = '<span class="url-status ' + t.status + '"></span><span class="url-text" title="' + escHtml(t.url) + '">' + escHtml(t.url) + '</span><button class="url-del" onclick="event.stopPropagation();removeUrl(\'' + t.id + '\')" title="Remove">&#10005;</button>';
+    div.onclick = () => { state.activeTarget = t.id; renderTargets(); };
+    list.appendChild(div);
+  }
+}
+
+function renderResult(r){
+  const container = document.getElementById('results-container');
+  const empty = container.querySelector('.empty-state'); if (empty) empty.remove();
+  const card = document.createElement('div');
+  card.className = 'result-card';
+  card.dataset.url = r.url; card.dataset.title = r.title; card.dataset.content = r.textContent.slice(0,500); card.dataset.matches = r.matches.join(',');
+  const tagsHtml = r.matches.map(m => '<span class="tag match">' + escHtml(m) + '</span>').join('') + '<span class="tag">d' + r.depth + '</span>';
+  card.innerHTML = '<div class="result-title">' + escHtml(r.title) + '</div><div class="result-meta"><span class="result-url">' + escHtml(r.url) + '</span></div><div class="result-snippet">' + escHtml(r.snippet) + '</div><div class="result-tags">' + tagsHtml + '</div><pre class="result-expand">' + escHtml(r.textContent.slice(0,3000)) + '</pre>';
+  card.onclick = () => card.classList.toggle('expanded');
+  container.appendChild(card);
+  document.getElementById('badge-results').textContent = state.results.length;
+}
+function filterResults(){
+  const q = document.getElementById('results-search').value.toLowerCase();
+  document.querySelectorAll('.result-card').forEach(card => {
+    const text = (card.dataset.url + card.dataset.title + card.dataset.content + card.dataset.matches).toLowerCase();
+    card.style.display = q === '' || text.includes(q) ? '' : 'none';
+  });
+}
+
+function recordDenied(url, reason){ state.deniedUrls.push({ url, reason, ts: Date.now() }); document.getElementById('badge-denial').textContent = state.deniedUrls.length; }
+function renderDenialMap(){
+  const container = document.getElementById('denial-container'); container.innerHTML = '';
+  if (!state.deniedUrls.length){ container.innerHTML = '<div class="empty-state"><div class="icon">&#8856;</div><div>No denials recorded.</div></div>'; return; }
+  const groups = {};
+  for (const d of state.deniedUrls){ (groups[d.reason] || (groups[d.reason] = [])).push(d); }
+  const summary = document.createElement('div');
+  summary.innerHTML = '<div class="denial-section-title">Summary - ' + state.deniedUrls.length + ' total denials</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">' + Object.entries(groups).map(([r,arr]) => '<span class="reason-pill reason-' + r + '">' + r + ' (' + arr.length + ')</span>').join('') + '</div>';
+  container.appendChild(summary);
+  for (const [reason, items] of Object.entries(groups)) {
+    const section = document.createElement('div');
+    section.innerHTML = '<div class="denial-section-title">' + reason + ' - ' + items.length + ' URLs</div><table class="denial-table"><thead><tr><th>URL</th><th>Reason</th></tr></thead><tbody>' + items.slice(0,200).map(d => '<tr><td title="' + escHtml(d.url) + '">' + escHtml(d.url) + '</td><td><span class="reason-pill reason-' + reason + '">' + reason + '</span></td></tr>').join('') + (items.length > 200 ? '<tr><td colspan="2" style="color:var(--muted);">... and ' + (items.length-200) + ' more</td></tr>' : '') + '</tbody></table>';
+    container.appendChild(section);
+  }
+}
+
+let logCount = 0;
+function log(msg, level){
+  level = level || 'info';
+  const container = document.getElementById('log-container');
+  const empty = container.querySelector('.empty-state'); if (empty) empty.remove();
+  const entry = document.createElement('div'); entry.className = 'log-entry ' + level;
+  entry.innerHTML = '<span class="log-ts">' + new Date().toISOString().slice(11,23) + '</span><span class="log-msg">' + escHtml(msg) + '</span>';
+  container.appendChild(entry); logCount++;
+  document.getElementById('badge-log').textContent = logCount;
+  container.scrollTop = container.scrollHeight;
+}
+
+function exportResults(){
+  const data = state.results.map(r => ({ url:r.url, title:r.title, description:r.description, matches:r.matches, snippet:r.snippet, depth:r.depth, timestamp:new Date(r.timestamp).toISOString() }));
+  download('rook-results.json', JSON.stringify(data, null, 2), 'application/json');
+}
+function exportCSV(){
+  const rows = [['URL','Title','Matches','Snippet','Depth','Timestamp']];
+  for (const r of state.results) rows.push([r.url, r.title, r.matches.join('|'), r.snippet.replace(/\n/g,' '), r.depth, new Date(r.timestamp).toISOString()]);
+  download('rook-results.csv', rows.map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n'), 'text/csv');
+}
+function download(filename, content, mime){ const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([content], { type: mime })); a.download = filename; a.click(); }
+
+function openConfig(){
+  const c = state.config;
+  document.getElementById('cfg-keywords').value = c.keywords.join('\n');
+  document.getElementById('cfg-selectors').value = c.selectors.join('\n');
+  document.getElementById('cfg-includes').value = c.includes.join('\n');
+  document.getElementById('cfg-excludes').value = c.excludes.join('\n');
+  document.getElementById('cfg-ext-blacklist').value = c.extBlacklist.join(',');
+  document.getElementById('cfg-skip-social').checked = c.skipSocial;
+  document.getElementById('cfg-proxy').value = c.proxyUrl;
+  const tokEl = document.getElementById('cfg-proxy-token'); if (tokEl) tokEl.value = c.proxyToken || '';
+  document.getElementById('cfg-ua').value = c.userAgent;
+  document.getElementById('cfg-timeout').value = c.timeout;
+  document.getElementById('cfg-max-size').value = Math.round(c.maxSize / 1024);
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeConfig(){ document.getElementById('modal-overlay').classList.remove('open'); }
+function saveConfig(){
+  const lines = el => document.getElementById(el).value.split('\n').map(s=>s.trim()).filter(Boolean);
+  state.config.keywords = lines('cfg-keywords');
+  state.config.selectors = lines('cfg-selectors');
+  state.config.includes = lines('cfg-includes');
+  state.config.excludes = lines('cfg-excludes');
+  state.config.extBlacklist = document.getElementById('cfg-ext-blacklist').value.split(',').map(s=>s.trim()).filter(Boolean);
+  state.config.skipSocial = document.getElementById('cfg-skip-social').checked;
+  state.config.proxyUrl = document.getElementById('cfg-proxy').value.trim();
+  const tokEl = document.getElementById('cfg-proxy-token'); state.config.proxyToken = tokEl ? tokEl.value.trim() : '';
+  state.config.userAgent = document.getElementById('cfg-ua').value.trim();
+  state.config.timeout = parseInt(document.getElementById('cfg-timeout').value) || 10000;
+  state.config.maxSize = (parseInt(document.getElementById('cfg-max-size').value) || 512) * 1024;
+  closeConfig();
+  log('Config saved. Keywords: [' + (state.config.keywords.join(', ')||'all') + ']', 'ok');
+  document.getElementById('sb-proxy-mode').textContent = state.config.proxyUrl ? 'override' : 'local';
+  document.getElementById('cors-notice').style.display = 'none';
+}
+function syncSettings(){
+  const s = state.settings;
+  s.maxDepth = parseInt(document.getElementById('s-max-depth').value) || 3;
+  s.maxPages = parseInt(document.getElementById('s-max-pages').value) || 50;
+  s.concurrency = parseInt(document.getElementById('s-concurrency').value) || 3;
+  s.delay = parseInt(document.getElementById('s-delay').value) || 500;
+  s.allowExternal = document.getElementById('s-allow-ext').checked;
+  s.allowSubdomains = document.getElementById('s-allow-sub').checked;
+  s.allowBackward = document.getElementById('s-allow-back').checked;
+  s.respectRobots = document.getElementById('s-robots').checked;
+  s.onlyMainContent = document.getElementById('s-main-content').checked;
+}
+
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'denial') renderDenialMap();
+}
+function toggleSection(id){
+  const body = document.getElementById('body-' + id), chevron = document.getElementById('chevron-' + id);
+  const header = chevron.closest('.sidebar-header');
+  const collapsed = body.classList.toggle('collapsed'); header.classList.toggle('collapsed', collapsed);
+}
+function clearAll(){
+  if (state.crawling){ log('Stop crawl before clearing.', 'warn'); return; }
+  state.results = []; state.deniedUrls = []; state.seenHashes.clear(); state.seenUrls.clear(); state._finishCalled = false;
+  state.stats = { discovered:0, fetched:0, results:0, denied:0, errors:0, dedup:0 }; logCount = 0;
+  ['discovered','fetched','results','denied','errors','dedup'].forEach(k => { const el = document.getElementById('st-' + k); if (el) el.textContent = '0'; });
+  state.targets.forEach(t => { t.status = 'idle'; }); renderTargets();
+  document.getElementById('log-container').innerHTML = '<div class="empty-state"><div class="icon">&#11041;</div><div>Cleared. Ready for next crawl.</div></div>';
+  document.getElementById('results-container').innerHTML = '<div class="empty-state"><div class="icon">&#9707;</div><div>No results yet.</div></div>';
+  document.getElementById('denial-container').innerHTML = '<div class="empty-state"><div class="icon">&#8856;</div><div>No denials recorded.</div></div>';
+  ['log','results','denial'].forEach(t => { document.getElementById('badge-' + t).textContent = '0'; });
+  document.getElementById('sb-queue').textContent = '0';
+}
+function escHtml(str){ return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+(function init(){
+  renderTargets();
+  document.getElementById('cors-notice').style.display = 'none';
+  document.getElementById('sb-proxy-mode').textContent = state.config.proxyUrl ? 'override' : 'local';
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeConfig(); });
+  log('Rook Crawler ready.', 'dim');
+  log('Fetches route through the local server that served this page (server.js -> cuimp + rotating proxies).', 'dim');
+  log('Add target URLs, configure extraction in Config, then press Start.', 'dim');
+})();
+</script>
+</body>
+</html>

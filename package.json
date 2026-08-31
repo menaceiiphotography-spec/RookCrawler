@@ -1,0 +1,13 @@
+{
+  "name": "rook-crawler",
+  "version": "1.0.0",
+  "description": "Rook Crawler + anti-bot stealth CORS proxy (single local app).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cuimp": "*"
+  }
+}

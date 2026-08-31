@@ -1,0 +1,82 @@
+[
+  {
+    "name": "proxies-http.txt",
+    "path": "online-proxies/txt/proxies-http.txt",
+    "sha": "0d2fa352ec70b0956a1c6aaf599f9cdfd3e00cfe",
+    "size": 34484,
+    "url": "https://api.github.com/repos/jetkai/proxy-list/contents/online-proxies/txt/proxies-http.txt?ref=main",
+    "html_url": "https://github.com/jetkai/proxy-list/blob/main/online-proxies/txt/proxies-http.txt",
+    "git_url": "https://api.github.com/repos/jetkai/proxy-list/git/blobs/0d2fa352ec70b0956a1c6aaf599f9cdfd3e00cfe",
+    "download_url": "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/jetkai/proxy-list/contents/online-proxies/txt/proxies-http.txt?ref=main",
+      "git": "https://api.github.com/repos/jetkai/proxy-list/git/blobs/0d2fa352ec70b0956a1c6aaf599f9cdfd3e00cfe",
+      "html": "https://github.com/jetkai/proxy-list/blob/main/online-proxies/txt/proxies-http.txt"
+    }
+  },
+  {
+    "name": "proxies-https.txt",
+    "path": "online-proxies/txt/proxies-https.txt",
+    "sha": "4a5210dd4d33d286f109b6e2b26f0d7c83c70817",
+    "size": 41201,
+    "url": "https://api.github.com/repos/jetkai/proxy-list/contents/online-proxies/txt/proxies-https.txt?ref=main",
+    "html_url": "https://github.com/jetkai/proxy-list/blob/main/online-proxies/txt/proxies-https.txt",
+    "git_url": "https://api.github.com/repos/jetkai/proxy-list/git/blobs/4a5210dd4d33d286f109b6e2b26f0d7c83c70817",
+    "download_url": "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-https.txt",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/jetkai/proxy-list/contents/online-proxies/txt/proxies-https.txt?ref=main",
+      "git": "https://api.github.com/repos/jetkai/proxy-list/git/blobs/4a5210dd4d33d286f109b6e2b26f0d7c83c70817",
+      "html": "https://github.com/jetkai/proxy-list/blob/main/online-proxies/txt/proxies-https.txt"
+    }
+  },
+  {
+    "name": "proxies-socks4.txt",
+    "path": "online-proxies/txt/proxies-socks4.txt",
+    "sha": "fcac221f8088b2b27e95c353fb29b30a1b35b1ef",
+    "size": 31357,
+    "url": "https://api.github.com/repos/jetkai/proxy-list/contents/online-proxies/txt/proxies-socks4.txt?ref=main",
+    "html_url": "https://github.com/jetkai/proxy-list/blob/main/online-proxies/txt/proxies-socks4.txt",
+    "git_url": "https://api.github.com/repos/jetkai/proxy-list/git/blobs/fcac221f8088b2b27e95c353fb29b30a1b35b1ef",
+    "download_url": "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks4.txt",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/jetkai/proxy-list/contents/online-proxies/txt/proxies-socks4.txt?ref=main",
+      "git": "https://api.github.com/repos/jetkai/proxy-list/git/blobs/fcac221f8088b2b27e95c353fb29b30a1b35b1ef",
+      "html": "https://github.com/jetkai/proxy-list/blob/main/online-proxies/txt/proxies-socks4.txt"
+    }
+  },
+  {
+    "name": "proxies-socks5.txt",
+    "path": "online-proxies/txt/proxies-socks5.txt",
+    "sha": "e59265494f38a5ec90d46dd3f947b5d1680ac674",
+    "size": 8003,
+    "url": "https://api.github.com/repos/jetkai/proxy-list/contents/online-proxies/txt/proxies-socks5.txt?ref=main",
+    "html_url": "https://github.com/jetkai/proxy-list/blob/main/online-proxies/txt/proxies-socks5.txt",
+    "git_url": "https://api.github.com/repos/jetkai/proxy-list/git/blobs/e59265494f38a5ec90d46dd3f947b5d1680ac674",
+    "download_url": "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks5.txt",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/jetkai/proxy-list/contents/online-proxies/txt/proxies-socks5.txt?ref=main",
+      "git": "https://api.github.com/repos/jetkai/proxy-list/git/blobs/e59265494f38a5ec90d46dd3f947b5d1680ac674",
+      "html": "https://github.com/jetkai/proxy-list/blob/main/online-proxies/txt/proxies-socks5.txt"
+    }
+  },
+  {
+    "name": "proxies.txt",
+    "path": "online-proxies/txt/proxies.txt",
+    "sha": "c2d334bb254597676bac9872c7d34b9dffc3a8f1",
+    "size": 81671,
+    "url": "https://api.github.com/repos/jetkai/proxy-list/contents/online-proxies/txt/proxies.txt?ref=main",
+    "html_url": "https://github.com/jetkai/proxy-list/blob/main/online-proxies/txt/proxies.txt",
+    "git_url": "https://api.github.com/repos/jetkai/proxy-list/git/blobs/c2d334bb254597676bac9872c7d34b9dffc3a8f1",
+    "download_url": "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies.txt",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/jetkai/proxy-list/contents/online-proxies/txt/proxies.txt?ref=main",
+      "git": "https://api.github.com/repos/jetkai/proxy-list/git/blobs/c2d334bb254597676bac9872c7d34b9dffc3a8f1",
+      "html": "https://github.com/jetkai/proxy-list/blob/main/online-proxies/txt/proxies.txt"
+    }
+  }
+]
