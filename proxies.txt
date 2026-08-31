@@ -1,0 +1,28 @@
+# Rook Crawler - Proxy Pool Configuration
+# Add one proxy per line. Supports HTTP, HTTPS, SOCKS5, and Tor.
+# Proxies are rotated on each request for stealth and load balancing.
+# Hot-reload: Changes are picked up automatically without restarting.
+
+# === Examples ===
+
+# HTTP/HTTPS proxies (basic HTTP authentication)
+# http://user:pass@proxy-host:8000
+# https://user:pass@proxy-host:8000
+
+# SOCKS5 proxy (with authentication)
+# socks5://user:pass@127.0.0.1:1080
+
+# SOCKS5 proxy (no auth)
+# socks5://127.0.0.1:1080
+
+# Tor network (requires tor.json enabled: true and Tor daemon running)
+# tor://
+
+# === Notes ===
+# - Datacenter proxies are faster but easier to detect.
+# - Residential proxies are slower but much harder to detect.
+# - Tor provides maximum anonymity but is slowest; use for .onion only.
+# - Leave empty to use direct connections (not recommended for web crawling).
+# - Use multiple proxies for better load distribution and bypass detection.
+
+# === Add your proxies below this line ===
