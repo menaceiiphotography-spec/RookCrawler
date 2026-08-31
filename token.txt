@@ -1,0 +1,16 @@
+# Rook Crawler - Authentication Token
+# Optional: Set a token to protect the proxy from unauthorized access.
+# Leave empty to disable token auth (proxy will be open).
+# Token is checked against X-Proxy-Token header in requests.
+
+# Generate a secure token (example):
+# On Linux/macOS: head -c 32 /dev/urandom | base64
+# On Windows: [Convert]::ToBase64String((1..32 | ForEach-Object {[byte](Get-Random -Max 256)}))
+
+# Then set it here or via environment variable:
+# export PROXY_TOKEN="your-secret-token-here"
+# npm start
+
+# If set, all requests must include: X-Proxy-Token: your-secret-token-here
+# or add ?token=your-secret-token-here to the URL.
+
