@@ -1,0 +1,30 @@
+{
+  "enabled": false,
+  "timeout": 30000,
+  "headless": true,
+  "args": [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--single-process"
+  ],
+  "screenshot": false,
+  "pdf": false,
+  "waitUntil": "networkidle2",
+  "javascript_rendering": {
+    "enabled": false,
+    "timeout": 10000,
+    "wait_for_selector": null,
+    "inject_script": null
+  },
+  "resource_blocking": {
+    "enabled": true,
+    "block_types": ["image", "stylesheet", "media", "font"]
+  },
+  "cookies": {
+    "enabled": true,
+    "persist": true
+  },
+  "_comment": "Puppeteer headless browser rendering. DISABLED by default (slow). Enable only when needed for JavaScript-heavy pages. Requires Node.js 16+."
+}
