@@ -119,7 +119,7 @@ function fetchViaCuimp(method, targetUrl, options) {
         throw new Error('cuimp.createCuimpHttp is not available');
     }
 
-    const m = method.toLowerCase();
+    const m = method.toUpperCase();
 
     const client = cuimp.createCuimpHttp({
         descriptor: {
@@ -129,13 +129,26 @@ function fetchViaCuimp(method, targetUrl, options) {
         autoDownload: false
     });
 
-    if (typeof client[m] === 'function') {
-        return client[m](targetUrl, options);
+    const reqOptions = {
+        ...options,
+        headers: options.headers || {}
+    };
+
+    // Pass proxy as a string in the options (not as a separate property)
+    if (options.proxy) {
+        reqOptions.proxy = options.proxy;
+    }
+
+    // Remove browser from the request options to avoid conflicts
+    delete reqOptions.browser;
+
+    if (typeof client[m.toLowerCase()] === 'function') {
+        return client[m.toLowerCase()](targetUrl, reqOptions);
     }
 
     if (typeof client.request === 'function') {
         return client.request({
-            ...options,
+            ...reqOptions,
             url: targetUrl,
             method: m
         });
@@ -153,8 +166,26 @@ function resolveTarget(req) {
 
 loadProxies();
 loadToken();
-fs.watchFile(PROXIES_FILE, () => { console.log('[SYSTEM] proxies.txt changed, reloading...'); loadProxies(); currentProxyIndex = 0; });
-fs.watchFile(TOKEN_FILE, () => { console.log('[SYSTEM] token.txt changed, reloading...'); loadToken(); });
+
+// File watch error handling
+fs.watchFile(PROXIES_FILE, (curr, prev) => {
+    try {
+        console.log('[SYSTEM] proxies.txt changed, reloading...');
+        loadProxies();
+        currentProxyIndex = 0;
+    } catch (err) {
+        console.error('[ERROR] Failed to reload proxies.txt:', err.message);
+    }
+});
+
+fs.watchFile(TOKEN_FILE, (curr, prev) => {
+    try {
+        console.log('[SYSTEM] token.txt changed, reloading...');
+        loadToken();
+    } catch (err) {
+        console.error('[ERROR] Failed to reload token.txt:', err.message);
+    }
+});
 
 app.use(async (req, res) => {
     const target = resolveTarget(req);
@@ -212,7 +243,7 @@ app.use(async (req, res) => {
             ...(req.headers['content-type'] ? { 'Content-Type': req.headers['content-type'] } : {})
         },
         timeout: 15000,
-        ...(hasBody ? { body: req.body } : {}) // rename 'body' -> 'data' if your lib expects axios-style
+        ...(hasBody ? { data: req.body } : {}) // Use 'data' for request body (cuimp convention)
     };
 
     const attempts = proxyPool.length > 0 ? Math.min(proxyPool.length, 3) : 1;
@@ -244,11 +275,29 @@ app.use(async (req, res) => {
     res.status(502).send(`Anti-bot routing failure: ${lastError ? lastError.message : 'all proxies failed'}`);
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`\n============================================================`);
     console.log(`[LIVE] Rook Crawler + Stealth Proxy`);
     console.log(`[OPEN] http://localhost:${PORT}/   (the app is served here)`);
     console.log(`[AUTH] ${PROXY_TOKEN ? 'token required' : 'OPEN - no token set'}`);
     console.log(`[PROXY] ${proxyPool.length} rotating proxies loaded`);
     console.log(`============================================================\n`);
+});
+
+// Graceful error handling for server
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`[ERROR] Port ${PORT} is already in use. Try another port: PORT=8011 npm start`);
+    } else {
+        console.error(`[ERROR] Server error: ${err.message}`);
+    }
+    process.exit(1);
+});
+
+process.on('SIGTERM', () => {
+    console.log('[SYSTEM] SIGTERM received, shutting down gracefully...');
+    server.close(() => {
+        console.log('[SYSTEM] Server closed');
+        process.exit(0);
+    });
 });
