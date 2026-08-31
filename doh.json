@@ -1,0 +1,15 @@
+{
+  "enabled": true,
+  "provider": "cloudflare",
+  "providers": {
+    "cloudflare": "https://1.1.1.1/dns-query",
+    "google": "https://dns.google/dns-query",
+    "quad9": "https://dns.quad9.net/dns-query",
+    "nextdns": "https://dns.nextdns.io"
+  },
+  "timeout": 5000,
+  "cache": true,
+  "cacheMaxSize": 1000,
+  "cacheTTL": 3600,
+  "_comment": "DNS over HTTPS configuration. Prevents DNS leaks. Supported providers: cloudflare, google, quad9, nextdns. Cache TTL in seconds."
+}

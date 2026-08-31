@@ -1,0 +1,91 @@
+{
+  "enabled": true,
+  "strategies": {
+    "adaptive_delay": {
+      "enabled": true,
+      "minDelay": 100,
+      "maxDelay": 5000,
+      "backoffMultiplier": 1.5,
+      "description": "Automatically increase delays when receiving rate-limit responses (429)"
+    },
+    "content_prioritization": {
+      "enabled": true,
+      "priority_selectors": [
+        "article",
+        "main",
+        ".content",
+        ".post",
+        "[role=main]"
+      ],
+      "description": "Extract main content first, skip ads/nav/sidebar"
+    },
+    "anti_bot_detection": {
+      "enabled": true,
+      "signatures": [
+        "captcha",
+        "challenge",
+        "robot",
+        "suspicious",
+        "unusual activity"
+      ],
+      "actions": {
+        "retry_with_fingerprint": true,
+        "switch_proxy": true,
+        "wait_before_retry": 5000
+      },
+      "description": "Detect anti-bot pages and adapt request strategy"
+    },
+    "javascript_rendering": {
+      "enabled": false,
+      "timeout": 10000,
+      "description": "Render JavaScript when needed (requires headless browser). Currently disabled."
+    },
+    "cookie_persistence": {
+      "enabled": true,
+      "storage": "memory",
+      "maxCookies": 100,
+      "description": "Maintain cookies across requests for session preservation"
+    },
+    "link_quality_scoring": {
+      "enabled": true,
+      "factors": {
+        "relevance": 0.4,
+        "depth": 0.3,
+        "anchor_text": 0.2,
+        "target_type": 0.1
+      },
+      "description": "Score links by relevance and prioritize high-value URLs"
+    },
+    "dynamic_ua_rotation": {
+      "enabled": true,
+      "interval": 10,
+      "description": "Rotate browser fingerprints every N requests"
+    }
+  },
+  "response_analysis": {
+    "status_codes": {
+      "429": "Rate limited - enable adaptive_delay and increase concurrency delay",
+      "403": "Forbidden - try different fingerprint or proxy",
+      "503": "Service unavailable - exponential backoff",
+      "999": "LinkedIn block - use residential proxy if available",
+      "200": "Success - continue",
+      "301": "Redirect - follow",
+      "302": "Redirect - follow"
+    },
+    "content_signals": {
+      "error_keywords": ["error", "not found", "404", "forbidden"],
+      "redirect_chains": 3,
+      "min_content_length": 100
+    }
+  },
+  "memory": {
+    "learnFromErrors": true,
+    "blacklistDurations": {
+      "permanent": -1,
+      "rate_limit": 1800000,
+      "temporary": 300000
+    },
+    "description": "Track errors and adapt strategy. Durations in milliseconds."
+  },
+  "_comment": "Crawler intelligence enables adaptive, resilient crawling. All strategies can be toggled individually. Requires server.js to be restarted for changes to take effect."
+}

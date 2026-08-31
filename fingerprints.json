@@ -1,0 +1,59 @@
+{
+  "browser_profiles": {
+    "chrome_latest": {
+      "name": "Chrome Latest",
+      "browser": "chrome",
+      "version": "latest",
+      "userAgentPrefix": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    },
+    "chrome_windows": {
+      "name": "Chrome Windows",
+      "browser": "chrome",
+      "version": "120",
+      "userAgentPrefix": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    },
+    "chrome_linux": {
+      "name": "Chrome Linux",
+      "browser": "chrome",
+      "version": "120",
+      "userAgentPrefix": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
+    },
+    "chrome_mac": {
+      "name": "Chrome macOS",
+      "browser": "chrome",
+      "version": "120",
+      "userAgentPrefix": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+    },
+    "firefox_latest": {
+      "name": "Firefox Latest",
+      "browser": "firefox",
+      "version": "latest",
+      "userAgentPrefix": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0"
+    },
+    "firefox_windows": {
+      "name": "Firefox Windows",
+      "browser": "firefox",
+      "version": "120",
+      "userAgentPrefix": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
+    },
+    "firefox_linux": {
+      "name": "Firefox Linux",
+      "browser": "firefox",
+      "version": "120",
+      "userAgentPrefix": "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0"
+    },
+    "edge_windows": {
+      "name": "Edge Windows",
+      "browser": "edge",
+      "version": "latest",
+      "userAgentPrefix": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edg/"
+    },
+    "safari_mac": {
+      "name": "Safari macOS",
+      "browser": "safari",
+      "version": "latest",
+      "userAgentPrefix": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15"
+    }
+  },
+  "_comment": "Browser fingerprints for TLS/HTTP mimicry. Profiles rotate automatically when dynamic_ua_rotation is enabled in crawler-intelligence.json. Add more profiles to increase stealth."
+}

@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "mode": "local",
+  "socksPort": 9050,
+  "controlPort": 9051,
+  "password": "",
+  "browserPath": "",
+  "autoLaunch": false,
+  "circuitIsolation": true,
+  "circuitRotationInterval": 300000,
+  "_comment": "Set enabled: true to use Tor. Mode can be 'local' (Tor daemon) or 'remote' (Tor Browser). Set autoLaunch: true to auto-start Tor Browser."
+}
