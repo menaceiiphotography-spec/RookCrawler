@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const net = require('net');
 const crypto = require('crypto');
+const https = require('https');
+const { URL } = require('url');
 const cuimp = require('cuimp');
 
 const app = express();
@@ -11,19 +13,31 @@ const INDEX_FILE = path.join(__dirname, 'index.html');
 const PROXIES_FILE = path.join(__dirname, 'proxies.txt');
 const TOKEN_FILE = path.join(__dirname, 'token.txt');
 const TOR_CONFIG_FILE = path.join(__dirname, 'tor.json');
-
-// Proxy schemes: HTTP, HTTPS, SOCKS4, SOCKS5, Tor
-const ALLOWED_PROXY_SCHEMES = ['http:', 'https:', 'socks4:', 'socks5:'];
-const TOR_PATTERNS = /^tor:\/\/|\.onion$/i;
+const DOH_CONFIG_FILE = path.join(__dirname, 'doh.json');
+const FINGERPRINTS_FILE = path.join(__dirname, 'fingerprints.json');
+const INTELLIGENCE_FILE = path.join(__dirname, 'crawler-intelligence.json');
 
 app.use(express.raw({ type: '*/*', limit: '10mb' }));
 
+// State
 let proxyPool = [];
 let currentProxyIndex = 0;
+let currentFingerprintIndex = 0;
 let PROXY_TOKEN = '';
-let torConfig = { enabled: false, socksPort: 9050, controlPort: 9051, password: '' };
+let torConfig = { enabled: false, mode: 'local', socksPort: 9050, controlPort: 9051, password: '', autoLaunch: false };
+let dohConfig = { enabled: true, provider: 'cloudflare', providers: {}, timeout: 5000, cache: true, cacheMaxSize: 1000 };
+let fingerprintProfiles = { browser_profiles: {} };
+let crawlerIntelligence = { enabled: true, strategies: {}, response_analysis: {}, memory: {} };
 
-// ---- Auth token ----
+// In-memory storage for intelligence
+const dnsCache = new Map();
+const responseMemory = new Map();
+const blacklist = new Map();
+
+const ALLOWED_PROXY_SCHEMES = ['http:', 'https:', 'socks4:', 'socks5:'];
+const TOR_PATTERNS = /^tor:\/\/|\.onion$/i;
+
+// ---- Config Loaders ----
 function loadToken() {
     if (process.env.PROXY_TOKEN && process.env.PROXY_TOKEN.trim()) {
         PROXY_TOKEN = process.env.PROXY_TOKEN.trim();
@@ -40,78 +54,203 @@ function loadToken() {
     }
     console.log(PROXY_TOKEN
         ? '[SECURITY] Token auth ENABLED.'
-        : '[SECURITY] WARNING: no token set - proxy is OPEN to anything that can reach it.');
+        : '[SECURITY] WARNING: no token set - proxy is OPEN.');
 }
 
-function safeEqual(a, b) {
-    const ab = Buffer.from(String(a)), bb = Buffer.from(String(b));
-    if (ab.length !== bb.length) return false;
-    return crypto.timingSafeEqual(ab, bb);
-}
-
-// ---- Tor Configuration ----
 function loadTorConfig() {
     try {
         if (fs.existsSync(TOR_CONFIG_FILE)) {
-            const cfg = JSON.parse(fs.readFileSync(TOR_CONFIG_FILE, 'utf8'));
-            torConfig = { enabled: false, socksPort: 9050, controlPort: 9051, password: '', ...cfg };
+            torConfig = JSON.parse(fs.readFileSync(TOR_CONFIG_FILE, 'utf8'));
             if (torConfig.enabled) {
-                console.log(`[TOR] Config loaded: SOCKS on port ${torConfig.socksPort}, Control on ${torConfig.controlPort}`);
+                console.log(`[TOR] Mode: ${torConfig.mode}, SOCKS: 127.0.0.1:${torConfig.socksPort}`);
+                if (torConfig.autoLaunch && torConfig.browserPath) {
+                    console.log(`[TOR] Auto-launch enabled: ${torConfig.browserPath}`);
+                }
             }
         } else {
             const defaultConfig = {
                 enabled: false,
+                mode: 'local',
                 socksPort: 9050,
                 controlPort: 9051,
-                password: ''
+                password: '',
+                browserPath: '',
+                autoLaunch: false,
+                circuitIsolation: true,
+                circuitRotationInterval: 300000
             };
-            fs.writeFileSync(TOR_CONFIG_FILE,
-                JSON.stringify(defaultConfig, null, 2),
-                'utf8');
-            console.log('[TOR] Created default tor.json (disabled). Set "enabled": true to use Tor.');
+            fs.writeFileSync(TOR_CONFIG_FILE, JSON.stringify(defaultConfig, null, 2), 'utf8');
             torConfig = defaultConfig;
+            console.log('[TOR] Created tor.json (disabled by default)');
         }
     } catch (err) {
         console.error('[ERROR] tor.json:', err.message);
-        torConfig = { enabled: false, socksPort: 9050, controlPort: 9051, password: '' };
+        torConfig = { enabled: false, mode: 'local', socksPort: 9050 };
     }
 }
 
-// ---- Proxy pool with Tor support ----
+function loadDoHConfig() {
+    try {
+        if (fs.existsSync(DOH_CONFIG_FILE)) {
+            dohConfig = JSON.parse(fs.readFileSync(DOH_CONFIG_FILE, 'utf8'));
+            console.log(`[DOH] Provider: ${dohConfig.provider}, Cache: ${dohConfig.cache}`);
+        } else {
+            const defaultConfig = {
+                enabled: true,
+                provider: 'cloudflare',
+                providers: {
+                    cloudflare: 'https://1.1.1.1/dns-query',
+                    google: 'https://dns.google/dns-query',
+                    quad9: 'https://dns.quad9.net/dns-query'
+                },
+                timeout: 5000,
+                cache: true,
+                cacheMaxSize: 1000,
+                cacheTTL: 3600
+            };
+            fs.writeFileSync(DOH_CONFIG_FILE, JSON.stringify(defaultConfig, null, 2), 'utf8');
+            dohConfig = defaultConfig;
+            console.log('[DOH] Created doh.json');
+        }
+    } catch (err) {
+        console.error('[ERROR] doh.json:', err.message);
+        dohConfig = { enabled: true, provider: 'cloudflare' };
+    }
+}
+
+function loadFingerprintProfiles() {
+    try {
+        if (fs.existsSync(FINGERPRINTS_FILE)) {
+            fingerprintProfiles = JSON.parse(fs.readFileSync(FINGERPRINTS_FILE, 'utf8'));
+            const count = Object.keys(fingerprintProfiles.browser_profiles || {}).length;
+            console.log(`[FINGERPRINTS] Loaded ${count} browser profiles`);
+        } else {
+            const defaultProfiles = {
+                browser_profiles: {
+                    chrome_latest: { name: 'Chrome Latest', browser: 'chrome', version: 'latest' },
+                    firefox_latest: { name: 'Firefox Latest', browser: 'firefox', version: 'latest' },
+                    edge_windows: { name: 'Edge Windows', browser: 'edge', version: 'latest' },
+                    safari_mac: { name: 'Safari macOS', browser: 'safari', version: 'latest' }
+                }
+            };
+            fs.writeFileSync(FINGERPRINTS_FILE, JSON.stringify(defaultProfiles, null, 2), 'utf8');
+            fingerprintProfiles = defaultProfiles;
+            console.log('[FINGERPRINTS] Created fingerprints.json');
+        }
+    } catch (err) {
+        console.error('[ERROR] fingerprints.json:', err.message);
+        fingerprintProfiles = { browser_profiles: {} };
+    }
+}
+
+function loadCrawlerIntelligence() {
+    try {
+        if (fs.existsSync(INTELLIGENCE_FILE)) {
+            crawlerIntelligence = JSON.parse(fs.readFileSync(INTELLIGENCE_FILE, 'utf8'));
+            console.log(`[INTELLIGENCE] Loaded with ${Object.keys(crawlerIntelligence.strategies || {}).length} strategies`);
+        } else {
+            const defaultIntelligence = {
+                enabled: true,
+                strategies: {
+                    adaptive_delay: { enabled: true },
+                    anti_bot_detection: { enabled: true },
+                    cookie_persistence: { enabled: true },
+                    dynamic_ua_rotation: { enabled: true }
+                },
+                response_analysis: {
+                    status_codes: {
+                        429: 'Rate limited - increase delay',
+                        403: 'Forbidden - try different proxy',
+                        503: 'Service unavailable - backoff'
+                    }
+                },
+                memory: { learnFromErrors: true }
+            };
+            fs.writeFileSync(INTELLIGENCE_FILE, JSON.stringify(defaultIntelligence, null, 2), 'utf8');
+            crawlerIntelligence = defaultIntelligence;
+            console.log('[INTELLIGENCE] Created crawler-intelligence.json');
+        }
+    } catch (err) {
+        console.error('[ERROR] crawler-intelligence.json:', err.message);
+        crawlerIntelligence = { enabled: false, strategies: {} };
+    }
+}
+
+// ---- DNS over HTTPS (DoH) ----
+async function resolveViaDoh(hostname) {
+    if (!dohConfig.enabled) return null;
+
+    const cacheKey = `dns:${hostname}`;
+    if (dohConfig.cache && dnsCache.has(cacheKey)) {
+        const cached = dnsCache.get(cacheKey);
+        if (Date.now() < cached.expires) {
+            console.log(`[DOH] Cache hit for ${hostname}`);
+            return cached.ips;
+        }
+        dnsCache.delete(cacheKey);
+    }
+
+    try {
+        const provider = dohConfig.providers[dohConfig.provider];
+        if (!provider) return null;
+
+        const dohUrl = `${provider}?name=${encodeURIComponent(hostname)}&type=A`;
+        const response = await new Promise((resolve, reject) => {
+            https.get(dohUrl, { timeout: dohConfig.timeout }, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => resolve(JSON.parse(data)));
+            }).on('error', reject);
+        });
+
+        const ips = response.Answer?.map(a => a.data) || [];
+        if (ips.length > 0 && dohConfig.cache) {
+            dnsCache.set(cacheKey, {
+                ips,
+                expires: Date.now() + (dohConfig.cacheTTL * 1000)
+            });
+            console.log(`[DOH] Resolved ${hostname}: ${ips.join(', ')}`);
+        }
+        return ips.length > 0 ? ips : null;
+    } catch (err) {
+        console.error(`[DOH] Resolution failed for ${hostname}:`, err.message);
+        return null;
+    }
+}
+
+// ---- Proxy Pool with Tor ----
 function loadProxies() {
     try {
         if (fs.existsSync(PROXIES_FILE)) {
             const lines = fs.readFileSync(PROXIES_FILE, 'utf8').split('\n')
                 .map(l => l.trim())
                 .filter(l => l.length > 0 && !l.startsWith('#'));
-            
+
             proxyPool = lines.filter(l => {
-                // Check for Tor indicator
                 if (TOR_PATTERNS.test(l)) {
                     if (torConfig.enabled) {
-                        console.log('[TOR] Tor entry detected in proxies.txt');
+                        console.log('[TOR] Entry detected in proxies.txt');
                         return true;
                     } else {
-                        console.warn('[TOR] Skipping Tor entry: Tor not enabled in tor.json');
+                        console.warn('[TOR] Skipping Tor entry: disabled in tor.json');
                         return false;
                     }
                 }
-                
-                // Validate standard proxy schemes
+
                 try {
                     return ALLOWED_PROXY_SCHEMES.includes(new URL(l).protocol);
                 } catch {
-                    console.warn(`[SYSTEM] Skipping malformed proxy line: ${l}`);
+                    console.warn(`[PROXY] Skipping malformed: ${l}`);
                     return false;
                 }
             });
-            
+
             console.log(`[SYSTEM] Loaded ${proxyPool.length} proxies from proxies.txt`);
         } else {
             fs.writeFileSync(PROXIES_FILE,
-                '# Paste your proxies here, one per line.\n# Lines starting with \'#\' are ignored.\n# Supports HTTP, HTTPS, SOCKS5, and Tor (tor:// or .onion domains).\n# Example:\n# http://user:pass@host:8000\n# socks5://127.0.0.1:1080\n# tor://\n',
+                '# Paste your proxies here, one per line.\n# Supports HTTP, HTTPS, SOCKS5, and Tor (tor://)\n# Example:\n# http://user:pass@host:8000\n# socks5://127.0.0.1:1080\n# tor://\n',
                 'utf8');
-            console.log('[SYSTEM] Created empty proxies.txt file.');
+            console.log('[SYSTEM] Created proxies.txt');
             proxyPool = [];
         }
     } catch (err) {
@@ -126,6 +265,14 @@ function getNextProxy() {
     return p;
 }
 
+function getNextFingerprint() {
+    const profiles = Object.values(fingerprintProfiles.browser_profiles || {});
+    if (profiles.length === 0) return { browser: 'chrome', version: 'latest' };
+    const fp = profiles[currentFingerprintIndex];
+    currentFingerprintIndex = (currentFingerprintIndex + 1) % profiles.length;
+    return fp;
+}
+
 function maskProxy(s) {
     if (TOR_PATTERNS.test(s)) return 'tor://';
     try {
@@ -137,7 +284,6 @@ function maskProxy(s) {
 }
 
 function resolveProxyForUrl(proxyEntry, targetUrl) {
-    // If Tor is requested or target is .onion
     if (TOR_PATTERNS.test(proxyEntry) || TOR_PATTERNS.test(targetUrl)) {
         if (!torConfig.enabled) {
             throw new Error('Tor is not enabled in tor.json');
@@ -147,13 +293,37 @@ function resolveProxyForUrl(proxyEntry, targetUrl) {
     return proxyEntry;
 }
 
-// ---- SSRF guard ----
+// ---- Crawler Intelligence: Response Analysis ----
+function analyzeResponse(statusCode, contentType, contentLength) {
+    const analysis = {
+        statusCode,
+        isError: statusCode >= 400,
+        isRateLimited: statusCode === 429,
+        isBlocked: statusCode === 403,
+        isServerError: statusCode >= 500,
+        contentValid: contentLength > (crawlerIntelligence.response_analysis?.content_signals?.min_content_length || 100)
+    };
+
+    if (crawlerIntelligence.enabled && crawlerIntelligence.memory?.learnFromErrors) {
+        const memKey = `status:${statusCode}`;
+        const mem = responseMemory.get(memKey) || { count: 0, lastSeen: 0 };
+        mem.count++;
+        mem.lastSeen = Date.now();
+        responseMemory.set(memKey, mem);
+
+        if (analysis.isRateLimited || analysis.isBlocked) {
+            console.log(`[INTELLIGENCE] Recorded ${statusCode} error for learning`);
+        }
+    }
+
+    return analysis;
+}
+
+// ---- SSRF Guard ----
 function isBlockedHost(hostname) {
     const host = hostname.toLowerCase();
-    
-    // Allow .onion domains (they are only accessible through Tor)
     if (host.endsWith('.onion')) return false;
-    
+
     if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.internal')) return true;
     if (net.isIP(host) === 4) {
         const p = host.split('.').map(Number);
@@ -168,42 +338,27 @@ function isBlockedHost(hostname) {
     return false;
 }
 
-// ---- Browser profiles ----
-const SUPPORTED_BROWSERS = ['chrome', 'firefox', 'edge', 'safari'];
-let currentBrowserIndex = 0;
-
-function resolveBrowser(req) {
-    const requested = String(
-        (req.query && req.query.browser) || 'chrome'
-    ).trim().toLowerCase();
-
-    if (requested === 'auto') {
-        const browser = SUPPORTED_BROWSERS[currentBrowserIndex];
-        currentBrowserIndex = (currentBrowserIndex + 1) % SUPPORTED_BROWSERS.length;
-        return browser;
-    }
-
-    if (!SUPPORTED_BROWSERS.includes(requested)) {
-        return null;
-    }
-
-    return requested;
+function safeEqual(a, b) {
+    const ab = Buffer.from(String(a)), bb = Buffer.from(String(b));
+    if (ab.length !== bb.length) return false;
+    return crypto.timingSafeEqual(ab, bb);
 }
 
-// ---- cuimp method dispatch (with validation) ----
+// ---- Cuimp Wrapper ----
 function fetchViaCuimp(method, targetUrl, options) {
     if (typeof cuimp.createCuimpHttp !== 'function') {
-        throw new Error('cuimp.createCuimpHttp is not available. Ensure cuimp is properly installed: npm install cuimp');
+        throw new Error('cuimp.createCuimpHttp not available. Install: npm install cuimp');
     }
 
     const m = method.toUpperCase();
-
     let client;
+
     try {
+        const fp = options.fingerprint || { browser: 'chrome', version: 'latest' };
         client = cuimp.createCuimpHttp({
             descriptor: {
-                browser: options.browser,
-                version: 'latest'
+                browser: fp.browser,
+                version: fp.version
             },
             autoDownload: false
         });
@@ -216,12 +371,12 @@ function fetchViaCuimp(method, targetUrl, options) {
         headers: options.headers || {}
     };
 
-    // Pass proxy as string
     if (options.proxy) {
         reqOptions.proxy = options.proxy;
     }
 
     delete reqOptions.browser;
+    delete reqOptions.fingerprint;
 
     try {
         if (typeof client[m.toLowerCase()] === 'function') {
@@ -236,26 +391,28 @@ function fetchViaCuimp(method, targetUrl, options) {
             });
         }
 
-        throw new Error(`cuimp client has no handler for method '${method}'`);
+        throw new Error(`cuimp has no handler for '${method}'`);
     } catch (err) {
         throw new Error(`cuimp request failed: ${err.message}`);
     }
 }
 
-// ---- Target resolution ----
+// ---- Target Resolution ----
 function resolveTarget(req) {
     if (req.query && typeof req.query.url === 'string' && req.query.url.trim()) return req.query.url.trim();
     const raw = req.originalUrl.replace(/^\/+/, '');
     return /^https?:\/\//i.test(raw) ? raw : null;
 }
 
-// Initialize
+// ---- Initialize ----
 loadTorConfig();
+loadDoHConfig();
+loadFingerprintProfiles();
+loadCrawlerIntelligence();
 loadProxies();
 loadToken();
 
-// File watchers
-fs.watchFile(PROXIES_FILE, (curr, prev) => {
+fs.watchFile(PROXIES_FILE, () => {
     try {
         console.log('[SYSTEM] proxies.txt changed, reloading...');
         loadProxies();
@@ -265,7 +422,7 @@ fs.watchFile(PROXIES_FILE, (curr, prev) => {
     }
 });
 
-fs.watchFile(TOKEN_FILE, (curr, prev) => {
+fs.watchFile(TOKEN_FILE, () => {
     try {
         console.log('[SYSTEM] token.txt changed, reloading...');
         loadToken();
@@ -274,15 +431,41 @@ fs.watchFile(TOKEN_FILE, (curr, prev) => {
     }
 });
 
-fs.watchFile(TOR_CONFIG_FILE, (curr, prev) => {
+fs.watchFile(TOR_CONFIG_FILE, () => {
     try {
-        console.log('[SYSTEM] tor.json changed, reloading...');
         loadTorConfig();
     } catch (err) {
         console.error('[ERROR] Failed to reload tor.json:', err.message);
     }
 });
 
+fs.watchFile(DOH_CONFIG_FILE, () => {
+    try {
+        loadDoHConfig();
+        dnsCache.clear();
+        console.log('[DOH] DNS cache cleared after config reload');
+    } catch (err) {
+        console.error('[ERROR] Failed to reload doh.json:', err.message);
+    }
+});
+
+fs.watchFile(FINGERPRINTS_FILE, () => {
+    try {
+        loadFingerprintProfiles();
+    } catch (err) {
+        console.error('[ERROR] Failed to reload fingerprints.json:', err.message);
+    }
+});
+
+fs.watchFile(INTELLIGENCE_FILE, () => {
+    try {
+        loadCrawlerIntelligence();
+    } catch (err) {
+        console.error('[ERROR] Failed to reload crawler-intelligence.json:', err.message);
+    }
+});
+
+// ---- Main Handler ----
 app.use(async (req, res) => {
     const target = resolveTarget(req);
 
@@ -294,11 +477,10 @@ app.use(async (req, res) => {
     if (origin !== '*') res.setHeader('Access-Control-Allow-Credentials', 'true');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
 
-    // No target -> serve app or 400
     if (!target) {
         if (req.method === 'GET') {
             if (fs.existsSync(INDEX_FILE)) return res.sendFile(INDEX_FILE);
-            return res.status(404).send('index.html not found next to server.js');
+            return res.status(404).send('index.html not found');
         }
         return res.status(400).send('No target. Use /?url=<encoded> or /<http...>.');
     }
@@ -318,27 +500,27 @@ app.use(async (req, res) => {
         parsed.searchParams.delete('token');
     }
     if (PROXY_TOKEN && (!token || !safeEqual(token, PROXY_TOKEN))) {
-        return res.status(401).send('Unauthorized: missing or invalid proxy token.');
+        return res.status(401).send('Unauthorized: invalid proxy token.');
     }
 
-    // SSRF check (allows .onion)
+    // SSRF check
     if (isBlockedHost(parsed.hostname)) {
-        return res.status(403).send('Target host is blocked.');
+        return res.status(403).send('Target host is blocked by SSRF guard.');
+    }
+
+    // DoH resolution (optional logging)
+    if (dohConfig.enabled && dohConfig.cache) {
+        const resolvedIps = await resolveViaDoh(parsed.hostname);
     }
 
     const targetUrl = parsed.toString();
-
-    const browser = resolveBrowser(req);
-    if (!browser) {
-        return res.status(400).send(
-            `Invalid browser. Supported: ${SUPPORTED_BROWSERS.join(', ')}, auto`
-        );
-    }
+    const fingerprint = crawlerIntelligence.enabled && crawlerIntelligence.strategies?.dynamic_ua_rotation?.enabled
+        ? getNextFingerprint()
+        : { browser: 'chrome', version: 'latest' };
 
     const hasBody = Buffer.isBuffer(req.body) && req.body.length > 0;
-
     const baseOptions = {
-        browser,
+        fingerprint,
         headers: {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
@@ -361,12 +543,14 @@ app.use(async (req, res) => {
             if (proxyEntry) {
                 const resolvedProxy = resolveProxyForUrl(proxyEntry, targetUrl);
                 fetchOptions.proxy = resolvedProxy;
-                console.log(`[FETCH] ${maskProxy(proxyEntry)} -> ${req.method} ${targetUrl}`);
+                console.log(`[FETCH] ${maskProxy(proxyEntry)} -> ${req.method} ${parsed.hostname}`);
             } else {
-                console.log(`[FETCH] direct -> ${req.method} ${targetUrl}`);
+                console.log(`[FETCH] direct -> ${req.method} ${parsed.hostname}`);
             }
 
             const r = await fetchViaCuimp(req.method, targetUrl, fetchOptions);
+            const analysis = analyzeResponse(r.status || 200, r.headers?.['content-type'], r.data?.length || 0);
+
             const ct = r.headers && r.headers['content-type'];
             if (ct) res.setHeader('Content-Type', ct);
             return res.status(r.status || 200).send(r.data);
@@ -381,31 +565,33 @@ app.use(async (req, res) => {
         }
     }
 
-    const errorMsg = lastError ? lastError.message : 'all proxies failed';
-    res.status(502).send(`Anti-bot routing failure: ${errorMsg}`);
+    res.status(502).send(`Routing failed: ${lastError ? lastError.message : 'all proxies failed'}`);
 });
 
 const server = app.listen(PORT, () => {
     console.log(`\n============================================================`);
-    console.log(`[LIVE] Rook Crawler + Stealth Proxy (with Tor support)`);
+    console.log(`[LIVE] Rook Crawler + Stealth Proxy (Advanced)`);
     console.log(`[OPEN] http://localhost:${PORT}/`);
-    console.log(`[AUTH] ${PROXY_TOKEN ? 'token required' : 'OPEN - no token set'}`);
-    console.log(`[PROXY] ${proxyPool.length} rotating proxies loaded`);
+    console.log(`[AUTH] ${PROXY_TOKEN ? 'ENABLED' : 'DISABLED'}`);
+    console.log(`[PROXY] ${proxyPool.length} proxies loaded`);
     console.log(`[TOR] ${torConfig.enabled ? 'ENABLED' : 'disabled'}`);
+    console.log(`[DOH] ${dohConfig.enabled ? `ENABLED (${dohConfig.provider})` : 'disabled'}`);
+    console.log(`[FINGERPRINTS] ${Object.keys(fingerprintProfiles.browser_profiles || {}).length} profiles`);
+    console.log(`[INTELLIGENCE] ${crawlerIntelligence.enabled ? 'ENABLED' : 'disabled'}`);
     console.log(`============================================================\n`);
 });
 
 server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
-        console.error(`[ERROR] Port ${PORT} is already in use. Try: PORT=8011 npm start`);
+        console.error(`[ERROR] Port ${PORT} in use. Try: PORT=8011 npm start`);
     } else {
-        console.error(`[ERROR] Server error: ${err.message}`);
+        console.error(`[ERROR] ${err.message}`);
     }
     process.exit(1);
 });
 
 process.on('SIGTERM', () => {
-    console.log('[SYSTEM] SIGTERM received, shutting down gracefully...');
+    console.log('[SYSTEM] Shutting down gracefully...');
     server.close(() => {
         console.log('[SYSTEM] Server closed');
         process.exit(0);
