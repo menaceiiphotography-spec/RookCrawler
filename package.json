@@ -1,12 +1,14 @@
 {
   "name": "rook-crawler",
-  "version": "2.0.0",
-  "description": "Rook Crawler + Stealth Proxy: Web crawler with Tor Browser, DoH/HTTPS, fingerprint rotation, AI intelligence. Works on Windows (PowerShell), macOS, Linux, Termux.",
+  "version": "2.1.0",
+  "description": "Rook Crawler + Stealth Proxy: Web crawler with Tor Browser, DoH/HTTPS, fingerprint rotation, AI intelligence, SQLite persistence, Puppeteer rendering, REST API. Works on Windows (PowerShell), macOS, Linux, Termux.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "db:init": "node scripts/db-init.js",
+    "db:migrate": "node scripts/db-migrate.js"
   },
   "keywords": [
     "crawler",
@@ -18,7 +20,12 @@
     "anti-bot",
     "stealth",
     "cuimp",
-    "socks5"
+    "socks5",
+    "puppeteer",
+    "headless-browser",
+    "sqlite",
+    "rest-api",
+    "websocket"
   ],
   "author": "John Petty",
   "license": "MIT",
@@ -32,7 +39,12 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "cuimp": "*"
+    "cuimp": "*",
+    "better-sqlite3": "^9.2.2",
+    "puppeteer": "^21.6.1",
+    "ws": "^8.15.0",
+    "uuid": "^9.0.1",
+    "ml-kmeans": "^4.1.4"
   },
   "optionalDependencies": {
     "tor": "*"
@@ -45,5 +57,13 @@
   ],
   "preferGlobal": false,
   "bin": {},
-  "_comment": "Supports Windows PowerShell 7.6.5+, macOS, Linux, Termux/Android. Uses cuimp for Chrome fingerprinting + TLS mimicry."
+  "_comment": "Supports Windows PowerShell 7.6.5+, macOS, Linux, Termux. Uses cuimp for Chrome fingerprinting + TLS mimicry. Includes SQLite persistence, Puppeteer headless rendering, and REST API.",
+  "_features": {
+    "persistence": "SQLite database for storing crawl results and history",
+    "rendering": "Puppeteer headless browser for JavaScript-rendered pages",
+    "ml": "K-means clustering for link quality prioritization",
+    "api": "REST API for remote crawling operations",
+    "realtime": "WebSocket support for live crawler updates",
+    "export": "CSV, JSON, XML export formats"
+  }
 }
